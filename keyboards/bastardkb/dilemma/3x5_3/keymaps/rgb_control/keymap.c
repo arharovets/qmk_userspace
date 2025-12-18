@@ -17,6 +17,9 @@
  */
 
 #include QMK_KEYBOARD_H
+#ifdef CONSOLE_ENABLE
+#    include "print.h"
+#endif
 
 enum dilemma_keymap_layers {
     LAYER_BASE = 0,
@@ -179,7 +182,11 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
 
 #ifdef RGB_MATRIX_ENABLE
 void keyboard_post_init_user(void) {
+    rgb_matrix_enable_noeeprom();
     rgb_matrix_mode_noeeprom(RGB_MATRIX_NONE);
+    if (rgb_matrix_config.hsv.v == 0) {
+        rgb_matrix_sethsv_noeeprom(rgb_matrix_config.hsv.h, rgb_matrix_config.hsv.s, RGB_MATRIX_MAXIMUM_BRIGHTNESS);
+    }
 }
 
 bool rgb_matrix_indicators_user(void) {
@@ -187,17 +194,50 @@ bool rgb_matrix_indicators_user(void) {
     RGB     key_color = key_layer_colors[layer];
     RGB     backlight_color = backlight_layer_colors[layer];
 
-    for (uint8_t i = 0; i < DRIVER_LED_TOTAL; i++) {
-        uint8_t flags = g_led_config.flags[i];
-        if (flags & LED_FLAG_UNDERGLOW) {
+    // Set underglow/backlight color for all underglow LEDs.
+    for (uint8_t i = 0; i < ARRAY_SIZE(g_led_config.flags); i++) {
+        if (g_led_config.flags[i] & LED_FLAG_UNDERGLOW) {
             rgb_matrix_set_color(i, backlight_color.r, backlight_color.g, backlight_color.b);
-        } else if (flags & LED_FLAG_KEYLIGHT) {
-            rgb_matrix_set_color(i, key_color.r, key_color.g, key_color.b);
+        }
+    }
+
+    // Light only occupied keys on the active layer; turn off transparent/empty positions.
+    for (uint8_t row = 0; row < MATRIX_ROWS; row++) {
+        for (uint8_t col = 0; col < MATRIX_COLS; col++) {
+            uint8_t led_index = g_led_config.matrix_co[row][col];
+            if (led_index == NO_LED) {
+                continue;
+            }
+            uint16_t kc = keymap_key_to_keycode(layer, (keypos_t){.row = row, .col = col});
+            if (kc == KC_NO || kc == KC_TRNS) {
+                rgb_matrix_set_color(led_index, 0, 0, 0);
+            } else {
+                rgb_matrix_set_color(led_index, key_color.r, key_color.g, key_color.b);
+            }
         }
     }
     return false;
 }
 #endif // RGB_MATRIX_ENABLE
+
+#ifdef POINTING_DEVICE_ENABLE
+#    ifdef CONSOLE_ENABLE
+static uint32_t pd_log_timer;
+
+void pointing_device_init_user(void) {
+    pd_log_timer = timer_read32();
+    uprintf("pd init user\r\n");
+}
+
+report_mouse_t pointing_device_task_user(report_mouse_t mouse_report) {
+    if (timer_elapsed32(pd_log_timer) > 1000) {
+        pd_log_timer = timer_read32();
+        uprintf("pd tick x=%d y=%d v=%d h=%d buttons=%02X\r\n", mouse_report.x, mouse_report.y, mouse_report.v, mouse_report.h, mouse_report.buttons);
+    }
+    return mouse_report;
+}
+#    endif // CONSOLE_ENABLE
+#endif     // POINTING_DEVICE_ENABLE
 
 #ifdef POINTING_DEVICE_ENABLE
 #    ifdef DILEMMA_AUTO_SNIPING_ON_LAYER

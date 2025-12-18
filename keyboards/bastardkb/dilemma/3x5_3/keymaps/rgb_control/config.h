@@ -25,3 +25,12 @@
 #define ENCODER_RESOLUTION 4
 
 #define RGB_MATRIX_DEFAULT_MODE RGB_MATRIX_NONE
+
+#define POINTING_DEVICE_DEBUG
+
+// Keep pointing data syncing from the right half trackpad.
+#define SPLIT_POINTING_ENABLE
+#define POINTING_DEVICE_RIGHT
+
+// Force the right half to be the USB master so the trackpad runs locally.
+#define MASTER_RIGHT
